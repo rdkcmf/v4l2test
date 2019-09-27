@@ -1097,7 +1097,7 @@ static int ioctl_wrapper( int fd, int request, void* arg )
       else
       {
          printf("ioct( %d, %x ) rc %d\n", fd, request, rc );
-         if ( request == VIDIOC_S_FMT )
+         if ( (request == VIDIOC_S_FMT) || (request == VIDIOC_G_FMT) )
          {
             struct v4l2_format *format= (struct v4l2_format*)arg;
             if ( (format->type == V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE) ||
@@ -1538,9 +1538,9 @@ static bool setupOutputBuffers( V4l2Ctx *v4l2 )
    if ( rc == 0 )
    {
       v4l2->minBuffersOut= ctl.value;
-      if ( v4l2->minBuffersOut != 0 )
+      if ( (v4l2->minBuffersOut != 0) && (v4l2->minBuffersOut > NUM_OUTPUT_BUFFERS) )
       {
-         neededBuffers= v4l2->minBuffersOut+2;
+         neededBuffers= v4l2->minBuffersOut;
       }
    }
 
@@ -2021,16 +2021,17 @@ static void *videoOutputThread( void *arg )
       rc= IOCTL( v4l2->v4l2Fd, VIDIOC_G_SELECTION, &selection );
       if ( rc < 0 )
       {
-         iprintf(0,"Error: videoOutputThread: decoder %d failed to get compose rect: rc %d errno %d\n", decCtx->decodeIndex, rc, errno );
-         decCtx->async->error= true;
-         goto exit;
+         iprintf(0,"Warning: videoOutputThread: decoder %d failed to get compose rect: rc %d errno %d\n", decCtx->decodeIndex, rc, errno );
       }
    }
    iprintf(2,"Out rect: (%d, %d, %d, %d)\n", selection.r.left, selection.r.top, selection.r.width, selection.r.height );
 
    pthread_mutex_lock( &decCtx->mutex );
-   decCtx->videoWidth= selection.r.width;
-   decCtx->videoHeight= selection.r.height;
+   if ( rc == 0 )
+   {
+      decCtx->videoWidth= selection.r.width;
+      decCtx->videoHeight= selection.r.height;
+   }
    iprintf(0,"%lld: decoder %d frame size: %dx%d capture buffer count %d\n", getCurrentTimeMillis(), decCtx->decodeIndex, decCtx->videoWidth, decCtx->videoHeight, decCtx->v4l2.numBuffersOut );
    pthread_mutex_unlock( &decCtx->mutex );
 
@@ -2507,6 +2508,10 @@ static bool updateFrame( DecCtx *decCtx, Surface *surface )
                {
                   fd0= v4l2->outBuffers[buffIndex].planeInfo[0].fd;
                   fd1= v4l2->outBuffers[buffIndex].planeInfo[1].fd;
+                  if ( fd1 == -1 )
+                  {
+                     fd1= fd0;
+                  }
                }
                else
                {
