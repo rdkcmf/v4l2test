@@ -38,6 +38,8 @@
 
 #include <drm/drm_fourcc.h>
 
+#define V4L2TEST_VERSION "0.11"
+
 #define EGL_EGLEXT_PROTOTYPES
 #include <EGL/egl.h>
 #include <EGL/eglext.h>
@@ -206,6 +208,7 @@ typedef struct _DecCtx
 
    int videoWidth;
    int videoHeight;
+   int videoBufferHeight;
    int videoRate;
 
    int prevFrameFd;
@@ -2032,6 +2035,11 @@ static void *videoOutputThread( void *arg )
       decCtx->videoWidth= selection.r.width;
       decCtx->videoHeight= selection.r.height;
    }
+   decCtx->videoBufferHeight= decCtx->videoHeight;
+   if (decCtx->videoHeight != v4l2->fmtOut.fmt.pix.height)
+   {
+      decCtx->videoBufferHeight= v4l2->fmtOut.fmt.pix.height;
+   }
    iprintf(0,"%lld: decoder %d frame size: %dx%d capture buffer count %d\n", getCurrentTimeMillis(), decCtx->decodeIndex, decCtx->videoWidth, decCtx->videoHeight, decCtx->v4l2.numBuffersOut );
    pthread_mutex_unlock( &decCtx->mutex );
 
@@ -2538,7 +2546,7 @@ static bool updateFrame( DecCtx *decCtx, Surface *surface )
                attr[i++]= EGL_DMA_BUF_PLANE1_FD_EXT;
                attr[i++]= fd1;
                attr[i++]= EGL_DMA_BUF_PLANE1_OFFSET_EXT;
-               attr[i++]= (fd0 != fd1 ? 0 : decCtx->videoWidth*decCtx->videoHeight);
+               attr[i++]= (fd0 != fd1 ? 0 : decCtx->videoWidth*decCtx->videoBufferHeight);
                attr[i++]= EGL_DMA_BUF_PLANE1_PITCH_EXT;
                attr[i++]= decCtx->videoWidth;
                attr[i++]= EGL_YUV_COLOR_SPACE_HINT_EXT;
@@ -2604,7 +2612,7 @@ static bool updateFrame( DecCtx *decCtx, Surface *surface )
                attr[6]= EGL_DMA_BUF_PLANE0_FD_EXT;
                attr[7]= decCtx->currFrameFd;
                attr[8]= EGL_DMA_BUF_PLANE0_OFFSET_EXT;
-               attr[9]= decCtx->videoWidth*decCtx->videoHeight;
+               attr[9]= decCtx->videoWidth*decCtx->videoBufferHeight;
                attr[10]= EGL_DMA_BUF_PLANE0_PITCH_EXT;
                attr[11]= decCtx->videoWidth;
                attr[12]= EGL_NONE;
@@ -3157,7 +3165,7 @@ int main( int argc, const char **argv )
 
    gReport= fopen( reportFilename, "wt" );
 
-   iprintf(0,"v4l2test v0.1\n");
+   iprintf(0,"v4l2test v%s\n", V4L2TEST_VERSION );
    iprintf(0,"-----------------------------------------------------------------\n");
 
    appCtx->platformCtx= PlatfromInit();
