@@ -38,7 +38,7 @@
 
 #include <drm/drm_fourcc.h>
 
-#define V4L2TEST_VERSION "0.11"
+#define V4L2TEST_VERSION "0.12"
 
 #define EGL_EGLEXT_PROTOTYPES
 #include <EGL/egl.h>
@@ -208,6 +208,7 @@ typedef struct _DecCtx
 
    int videoWidth;
    int videoHeight;
+   int videoBufferWidth;
    int videoBufferHeight;
    int videoRate;
 
@@ -2040,6 +2041,14 @@ static void *videoOutputThread( void *arg )
    {
       decCtx->videoBufferHeight= v4l2->fmtOut.fmt.pix.height;
    }
+   if ( v4l2->isMultiPlane )
+   {
+      decCtx->videoBufferWidth= v4l2->fmtOut.fmt.pix_mp.plane_fmt[0].bytesperline;
+   }
+   else
+   {
+      decCtx->videoBufferWidth= v4l2->fmtOut.fmt.pix.bytesperline;
+   }
    iprintf(0,"%lld: decoder %d frame size: %dx%d capture buffer count %d\n", getCurrentTimeMillis(), decCtx->decodeIndex, decCtx->videoWidth, decCtx->videoHeight, decCtx->v4l2.numBuffersOut );
    pthread_mutex_unlock( &decCtx->mutex );
 
@@ -2542,13 +2551,13 @@ static bool updateFrame( DecCtx *decCtx, Surface *surface )
                attr[i++]= EGL_DMA_BUF_PLANE0_OFFSET_EXT;
                attr[i++]= 0;
                attr[i++]= EGL_DMA_BUF_PLANE0_PITCH_EXT;
-               attr[i++]= decCtx->videoWidth;
+               attr[i++]= decCtx->videoBufferWidth;
                attr[i++]= EGL_DMA_BUF_PLANE1_FD_EXT;
                attr[i++]= fd1;
                attr[i++]= EGL_DMA_BUF_PLANE1_OFFSET_EXT;
-               attr[i++]= (fd0 != fd1 ? 0 : decCtx->videoWidth*decCtx->videoBufferHeight);
+               attr[i++]= (fd0 != fd1 ? 0 : decCtx->videoBufferWidth*decCtx->videoBufferHeight);
                attr[i++]= EGL_DMA_BUF_PLANE1_PITCH_EXT;
-               attr[i++]= decCtx->videoWidth;
+               attr[i++]= decCtx->videoBufferWidth;
                attr[i++]= EGL_YUV_COLOR_SPACE_HINT_EXT;
                attr[i++]= EGL_ITU_REC709_EXT;
                attr[i++]= EGL_SAMPLE_RANGE_HINT_EXT;
@@ -2585,7 +2594,7 @@ static bool updateFrame( DecCtx *decCtx, Surface *surface )
                attr[8]= EGL_DMA_BUF_PLANE0_OFFSET_EXT;
                attr[9]= 0;
                attr[10]= EGL_DMA_BUF_PLANE0_PITCH_EXT;
-               attr[11]= decCtx->videoWidth;
+               attr[11]= decCtx->videoBufferWidth;
                attr[12]= EGL_NONE;
 
                surface->eglImage[0]= gl->eglCreateImageKHR( egl->eglDisplay,
@@ -2614,7 +2623,7 @@ static bool updateFrame( DecCtx *decCtx, Surface *surface )
                attr[8]= EGL_DMA_BUF_PLANE0_OFFSET_EXT;
                attr[9]= decCtx->videoWidth*decCtx->videoBufferHeight;
                attr[10]= EGL_DMA_BUF_PLANE0_PITCH_EXT;
-               attr[11]= decCtx->videoWidth;
+               attr[11]= decCtx->videoBufferWidth;
                attr[12]= EGL_NONE;
 
                surface->eglImage[1]= gl->eglCreateImageKHR( egl->eglDisplay,
