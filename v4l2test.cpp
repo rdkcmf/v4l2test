@@ -38,7 +38,7 @@
 
 #include <drm/drm_fourcc.h>
 
-#define V4L2TEST_VERSION "0.12"
+#define V4L2TEST_VERSION "0.13"
 
 #define EGL_EGLEXT_PROTOTYPES
 #include <EGL/egl.h>
@@ -1210,6 +1210,7 @@ static bool getOutputFormats( V4l2Ctx *v4l2 )
    struct v4l2_fmtdesc format;
    int i, rc;
    int32_t bufferType;
+   bool haveNV12= false;
 
    bufferType= (v4l2->isMultiPlane ? V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE : V4L2_BUF_TYPE_VIDEO_CAPTURE);
 
@@ -1249,8 +1250,18 @@ static bool getOutputFormats( V4l2Ctx *v4l2 )
       {
          goto exit;
       }
+      if ( (v4l2->outputFormats[i].pixelformat == V4L2_PIX_FMT_NV12) ||
+           (v4l2->outputFormats[i].pixelformat == V4L2_PIX_FMT_NV12M) )
+      {
+         haveNV12= true;
+      }
       iprintf(1,"output format %d: flags %08x pixelFormat: %x desc: %s\n", 
              i, v4l2->outputFormats[i].flags, v4l2->outputFormats[i].pixelformat, v4l2->outputFormats[i].description );
+   }
+
+   if ( !haveNV12 )
+   {
+      iprintf(0,"no suport for NV12/NV12M output detected\n");
    }
 
    result= true;
@@ -1321,7 +1332,18 @@ static bool setOutputFormat( V4l2Ctx *v4l2 )
 
    if ( v4l2->isMultiPlane )
    {
-      v4l2->fmtOut.fmt.pix_mp.pixelformat= V4L2_PIX_FMT_NV12;
+      int i;
+      uint32_t pixelFormat= V4L2_PIX_FMT_NV12;
+      for( i= 0; i < v4l2->numOutputFormats; ++i)
+      {
+         if ( v4l2->outputFormats[i].pixelformat == V4L2_PIX_FMT_NV12M )
+         {
+            pixelFormat= V4L2_PIX_FMT_NV12M;
+            break;
+         }
+      }
+
+      v4l2->fmtOut.fmt.pix_mp.pixelformat= pixelFormat;
       v4l2->fmtOut.fmt.pix_mp.width= v4l2->decCtx->videoWidth;
       v4l2->fmtOut.fmt.pix_mp.height= v4l2->decCtx->videoHeight;
       v4l2->fmtOut.fmt.pix_mp.num_planes= 2;
