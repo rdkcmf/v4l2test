@@ -24,11 +24,16 @@ LICENSE_LOCATION ?= "${S}/LICENSE"
 LIC_FILES_CHKSUM = "file://${LICENSE_LOCATION};md5=09b658f7398abbac507b10feada73aac"
 
 PV = "1.0+gitr${SRCPV}"
+SRCREV = "${AUTOREV}"
 
-SRC_URI ?= "${CMF_GIT_ROOT}/components/opensource/v4l2test;protocol=${CMF_GIT_PROTOCOL};branch=${CMF_GIT_MASTER_BRANCH};name=v4l2test"
+CMF_GIT_ROOT ?= "git://code.rdkcentral.com/r"
+CMF_GIT_PROTOCOL ?= "https"
+CMF_GIT_MASTER_BRANCH ?= "master"
+
+SRC_URI = "${CMF_GIT_ROOT}/components/opensource/v4l2test;protocol=${CMF_GIT_PROTOCOL};branch=${CMF_GIT_MASTER_BRANCH};name=v4l2test"
 SRCREV_FORMAT = "v4l2test"
 
-S = "${WORKDIR}"
+S = "${WORKDIR}/git"
 
 DEPENDS = "virtual/egl libdrm"
 
