@@ -38,7 +38,7 @@
 
 #include <drm/drm_fourcc.h>
 
-#define V4L2TEST_VERSION "0.13"
+#define V4L2TEST_VERSION "0.14"
 
 #define EGL_EGLEXT_PROTOTYPES
 #include <EGL/egl.h>
@@ -153,6 +153,7 @@ typedef struct _BufferInfo
    int fd;
    void *start;
    int capacity;
+   bool queued;
 } BufferInfo;
 
 typedef struct _V4l2Ctx
@@ -1010,15 +1011,15 @@ static int ioctl_wrapper( int fd, int request, void* arg )
          case VIDIOC_G_SELECTION: req= "VIDIOC_G_SELECTION"; break;
          default: req= "NA"; break;
       }
-      printf("ioct( %d, %x ( %s ) )\n", fd, request, req );
+      fprintf(stderr,"ioct( %d, %x ( %s ) )\n", fd, request, req );
       if ( request == VIDIOC_S_FMT )
       {
          struct v4l2_format *format= (struct v4l2_format*)arg;
-         printf(": type %d\n", format->type);
+         fprintf(stderr,": type %d\n", format->type);
          if ( (format->type == V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE) ||
               (format->type == V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE) )
          {
-            printf("pix_mp: pixelFormat %X w %d h %d field %d cs %d flg %x num_planes %d p0: sz %d bpl %d p1: sz %d bpl %d\n",
+            fprintf(stderr,"pix_mp: pixelFormat %X w %d h %d field %d cs %d flg %x num_planes %d p0: sz %d bpl %d p1: sz %d bpl %d\n",
                     format->fmt.pix_mp.pixelformat,
                     format->fmt.pix_mp.width,
                     format->fmt.pix_mp.height,
@@ -1036,14 +1037,14 @@ static int ioctl_wrapper( int fd, int request, void* arg )
       else if ( request == VIDIOC_REQBUFS )
       {
          struct v4l2_requestbuffers *rb= (struct v4l2_requestbuffers*)arg;
-         printf("count %d type %d mem %d\n", rb->count, rb->type, rb->memory);
+         fprintf(stderr,"count %d type %d mem %d\n", rb->count, rb->type, rb->memory);
       }
       else if ( request == VIDIOC_CREATE_BUFS )
       {
          struct v4l2_create_buffers *cb= (struct v4l2_create_buffers*)arg;
          struct v4l2_format *format= &cb->format;
-         printf("count %d mem %d\n", cb->count, cb->memory);
-         printf("pix_mp: pixelFormat %X w %d h %d num_planes %d p0: sz %d bpl %d p1: sz %d bpl %d\n",
+         fprintf(stderr,"count %d mem %d\n", cb->count, cb->memory);
+         fprintf(stderr,"pix_mp: pixelFormat %X w %d h %d num_planes %d p0: sz %d bpl %d p1: sz %d bpl %d\n",
                  format->fmt.pix_mp.pixelformat,
                  format->fmt.pix_mp.width,
                  format->fmt.pix_mp.height,
@@ -1057,13 +1058,13 @@ static int ioctl_wrapper( int fd, int request, void* arg )
       else if ( request == VIDIOC_QBUF )
       {
          struct v4l2_buffer *buf= (struct v4l2_buffer*)arg;
-         printf("buff: index %d q: type %d bytesused %d flags %X field %d mem %x length %d timestamp sec %ld usec %ld\n",
+         fprintf(stderr,"buff: index %d q: type %d bytesused %d flags %X field %d mem %x length %d timestamp sec %ld usec %ld\n",
                 buf->index, buf->type, buf->bytesused, buf->flags, buf->field, buf->memory, buf->length, buf->timestamp.tv_sec, buf->timestamp.tv_usec);
          if ( buf->m.planes &&
               ( (buf->type == V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE) ||
                 (buf->type == V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE) ) )
          {
-            printf("buff: p0: bu %d len %d moff %d doff %d p1: bu %d len %d moff %d doff %d\n",
+            fprintf(stderr,"buff: p0: bu %d len %d moff %d doff %d p1: bu %d len %d moff %d doff %d\n",
                    buf->m.planes[0].bytesused, buf->m.planes[0].length, buf->m.planes[0].m.mem_offset, buf->m.planes[0].data_offset,
                    buf->m.planes[1].bytesused, buf->m.planes[1].length, buf->m.planes[1].m.mem_offset, buf->m.planes[1].data_offset );
          }
@@ -1071,13 +1072,13 @@ static int ioctl_wrapper( int fd, int request, void* arg )
       else if ( request == VIDIOC_DQBUF )
       {
          struct v4l2_buffer *buf= (struct v4l2_buffer*)arg;
-         printf("buff: index %d s dq: type %d bytesused %d flags %X field %d mem %x length %d timestamp sec %ld usec %ld\n",
+         fprintf(stderr,"buff: index %d s dq: type %d bytesused %d flags %X field %d mem %x length %d timestamp sec %ld usec %ld\n",
                 buf->index, buf->type, buf->bytesused, buf->flags, buf->field, buf->memory, buf->length, buf->timestamp.tv_sec, buf->timestamp.tv_usec);
          if ( buf->m.planes &&
               ( (buf->type == V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE) ||
                 (buf->type == V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE) ) )
          {
-            printf("buff: p0: bu %d len %d moff %d doff %d p1: bu %d len %d moff %d doff %d\n",
+            fprintf(stderr,"buff: p0: bu %d len %d moff %d doff %d p1: bu %d len %d moff %d doff %d\n",
                    buf->m.planes[0].bytesused, buf->m.planes[0].length, buf->m.planes[0].m.mem_offset, buf->m.planes[0].data_offset,
                    buf->m.planes[1].bytesused, buf->m.planes[1].length, buf->m.planes[1].m.mem_offset, buf->m.planes[1].data_offset );
          }
@@ -1085,7 +1086,7 @@ static int ioctl_wrapper( int fd, int request, void* arg )
       else if ( (request == VIDIOC_STREAMON) || (request == VIDIOC_STREAMOFF) )
       {
          int *type= (int*)arg;
-         printf(": type %d\n", *type);
+         fprintf(stderr,": type %d\n", *type);
       }
    }
 
@@ -1096,18 +1097,18 @@ static int ioctl_wrapper( int fd, int request, void* arg )
    {
       if ( rc < 0 )
       {
-         printf("ioct( %d, %x ) rc %d errno %d\n", fd, request, rc, errno );
+         fprintf(stderr,"ioct( %d, %x ) rc %d errno %d\n", fd, request, rc, errno );
       }
       else
       {
-         printf("ioct( %d, %x ) rc %d\n", fd, request, rc );
+         fprintf(stderr,"ioct( %d, %x ) rc %d\n", fd, request, rc );
          if ( (request == VIDIOC_S_FMT) || (request == VIDIOC_G_FMT) )
          {
             struct v4l2_format *format= (struct v4l2_format*)arg;
             if ( (format->type == V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE) ||
                  (format->type == V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE) )
             {
-               printf("pix_mp: pixelFormat %X w %d h %d num_planes %d p0: sz %d bpl %d p1: sz %d bpl %d\n",
+               fprintf(stderr,"pix_mp: pixelFormat %X w %d h %d num_planes %d p0: sz %d bpl %d p1: sz %d bpl %d\n",
                        format->fmt.pix_mp.pixelformat,
                        format->fmt.pix_mp.width,
                        format->fmt.pix_mp.height,
@@ -1122,23 +1123,23 @@ static int ioctl_wrapper( int fd, int request, void* arg )
          else if ( request == VIDIOC_CREATE_BUFS )
          {
             struct v4l2_create_buffers *cb= (struct v4l2_create_buffers*)arg;
-            printf("index %d count %d mem %d\n", cb->index, cb->count, cb->memory);
+            fprintf(stderr,"index %d count %d mem %d\n", cb->index, cb->count, cb->memory);
          }
          else if ( request == VIDIOC_G_CTRL )
          {
             struct v4l2_control *ctrl= (struct v4l2_control*)arg;
-            printf("id %d value %d\n", ctrl->id, ctrl->value);
+            fprintf(stderr,"id %d value %d\n", ctrl->id, ctrl->value);
          }
          else if ( request == VIDIOC_DQBUF )
          {
             struct v4l2_buffer *buf= (struct v4l2_buffer*)arg;
-            printf("buff: index %d f dq: type %d bytesused %d flags %X field %d mem %x length %d seq %d timestamp sec %ld usec %ld\n",
+            fprintf(stderr,"buff: index %d f dq: type %d bytesused %d flags %X field %d mem %x length %d seq %d timestamp sec %ld usec %ld\n",
                    buf->index, buf->type, buf->bytesused, buf->flags, buf->field, buf->memory, buf->length, buf->sequence, buf->timestamp.tv_sec, buf->timestamp.tv_usec);
             if ( buf->m.planes &&
                  ( (buf->type == V4L2_BUF_TYPE_VIDEO_CAPTURE_MPLANE) ||
                    (buf->type == V4L2_BUF_TYPE_VIDEO_OUTPUT_MPLANE) ) )
             {
-               printf("buff: p0: bu %d len %d moff %d doff %d p1: bu %d len %d moff %d doff %d\n",
+               fprintf(stderr,"buff: p0: bu %d len %d moff %d doff %d p1: bu %d len %d moff %d doff %d\n",
                       buf->m.planes[0].bytesused, buf->m.planes[0].length, buf->m.planes[0].m.mem_offset, buf->m.planes[0].data_offset,
                       buf->m.planes[1].bytesused, buf->m.planes[1].length, buf->m.planes[1].m.mem_offset, buf->m.planes[1].data_offset );
             }
@@ -1342,11 +1343,17 @@ static bool setOutputFormat( V4l2Ctx *v4l2 )
             break;
          }
       }
-
+      if ( pixelFormat == V4L2_PIX_FMT_NV12 )
+      {
+         v4l2->fmtOut.fmt.pix_mp.num_planes= 1;
+      }
+      else
+      {
+         v4l2->fmtOut.fmt.pix_mp.num_planes= 2;
+      }
       v4l2->fmtOut.fmt.pix_mp.pixelformat= pixelFormat;
       v4l2->fmtOut.fmt.pix_mp.width= v4l2->decCtx->videoWidth;
       v4l2->fmtOut.fmt.pix_mp.height= v4l2->decCtx->videoHeight;
-      v4l2->fmtOut.fmt.pix_mp.num_planes= 2;
       v4l2->fmtOut.fmt.pix_mp.plane_fmt[0].sizeimage= v4l2->decCtx->videoWidth*v4l2->decCtx->videoHeight;
       v4l2->fmtOut.fmt.pix_mp.plane_fmt[0].bytesperline= v4l2->decCtx->videoWidth;
       v4l2->fmtOut.fmt.pix_mp.plane_fmt[1].sizeimage= v4l2->decCtx->videoWidth*v4l2->decCtx->videoHeight/2;
@@ -1864,8 +1871,7 @@ static int getInputBuffer( V4l2Ctx *v4l2 )
    int i;
    for( i= 0; i < v4l2->numBuffersIn; ++i )
    {
-      if ( !(v4l2->inBuffers[i].buf.flags & V4L2_BUF_FLAG_QUEUED) ||
-           v4l2->inBuffers[i].buf.flags & V4L2_BUF_FLAG_DONE )
+      if ( !v4l2->inBuffers[i].queued )
       {
          bufferIndex= i;
          break;
@@ -1896,6 +1902,7 @@ static int getInputBuffer( V4l2Ctx *v4l2 )
             buf.m.planes= v4l2->inBuffers[bufferIndex].buf.m.planes;
          }
          v4l2->inBuffers[bufferIndex].buf= buf;
+         v4l2->inBuffers[bufferIndex].queued= false;
       }
       else if ( !v4l2->decCtx->videoInThreadStopRequested )
       {
@@ -2023,6 +2030,7 @@ static void *videoOutputThread( void *arg )
          decCtx->async->error= true;
          goto exit;
       }
+      v4l2->outBuffers[i].queued= true;
    }
 
    rc= IOCTL( v4l2->v4l2Fd, VIDIOC_STREAMON, &v4l2->fmtOut.type );
@@ -2132,6 +2140,7 @@ static void *videoOutputThread( void *arg )
             decCtx->async->error= true;
             goto exit;
          }
+         v4l2->outBuffers[buffIndex].queued= true;
       }
    }
 
@@ -2250,13 +2259,6 @@ static bool playFile( DecCtx *decCtx )
    int frameIndex, frameOffset, frameLength;
    int buffIndex, rc;
 
-   rc= IOCTL( v4l2->v4l2Fd, VIDIOC_STREAMON, &v4l2->fmtIn.type );
-   if ( rc < 0 )
-   {
-      iprintf(0,"Error: streamon failed for input: decoder %d rc %d errno %d\n", decCtx->decodeIndex, rc, errno );
-      goto exit;
-   }
-
    frameIndex= 0;
 
    for( ; ; )
@@ -2302,10 +2304,18 @@ static bool playFile( DecCtx *decCtx )
          decCtx->async->error= true;
          goto exit;
       }
+      v4l2->inBuffers[buffIndex].queued= true;
 
       if ( !v4l2->outputStarted )
       {
          v4l2->outputStarted= true;
+
+         rc= IOCTL( v4l2->v4l2Fd, VIDIOC_STREAMON, &v4l2->fmtIn.type );
+         if ( rc < 0 )
+         {
+            iprintf(0,"Error: streamon failed for input: decoder %d rc %d errno %d\n", decCtx->decodeIndex, rc, errno );
+            goto exit;
+         }
 
          setOutputFormat( v4l2 );
          setupOutputBuffers( v4l2 );
@@ -2464,7 +2474,7 @@ static bool prepareStream( AppCtx *appCtx, Stream *stream )
    {
       if ( (p[i] == 0) && (p[i+1] == 0) && (p[i+2] == 0) && (p[i+3] == 1) )
       {
-         if ( p[i+4] == 0x67 || p[i+4] == 0x68 )
+         if ( p[i+4] == 0x67 || p[i+4] == 0x68 || p[i+4] == 0x06 )
          {
             continue;
          }
@@ -2894,7 +2904,7 @@ static bool runUntilDone( AppCtx *appCtx )
 
 static void discoverVideoDecoder( void )
 {
-   int rc, len, i, fd;
+   int rc, len, i, fd, level;
    bool acceptsCompressed;
    V4l2Ctx v4l2;
    struct v4l2_exportbuffer eb;
@@ -3000,10 +3010,11 @@ static void discoverVideoDecoder( void )
             {
                iprintf(0,"device is multiplane\n");
             }
-            gLogLevel= 1;
+            level= gLogLevel;
+            if ( gLogLevel == 0) gLogLevel= 1;
             getInputFormats( &v4l2 );
             getOutputFormats( &v4l2 );
-            gLogLevel= 0;
+            gLogLevel= level;
             if ( v4l2.inputFormats )
             {
                free( v4l2.inputFormats );
@@ -3079,6 +3090,13 @@ int main( int argc, const char **argv )
    appCtx->videoWidth= DEFAULT_FRAME_WIDTH;
    appCtx->videoHeight= DEFAULT_FRAME_HEIGHT;
    appCtx->videoRate= DEFAULT_FRAME_RATE;
+
+   s= getenv("V4L2_DEBUG");
+   if ( s )
+   {
+      gLogLevel= atoi(s);
+   }
+   s= 0;
 
    argidx= 1;
    while( argidx < argc )
