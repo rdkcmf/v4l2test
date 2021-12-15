@@ -38,7 +38,7 @@
 
 #include <drm/drm_fourcc.h>
 
-#define V4L2TEST_VERSION "0.14"
+#define V4L2TEST_VERSION "0.15"
 
 #define EGL_EGLEXT_PROTOTYPES
 #include <EGL/egl.h>
@@ -275,7 +275,7 @@ typedef struct _AppCtx
 
 } AppCtx;
 
-static bool gVerbose= false;
+bool gVerbose= false;
 static int gLogLevel= 0;
 static char *gDeviceName= 0;
 static FILE *gReport= 0;
@@ -328,7 +328,7 @@ void iprintf( int level, const char *fmt, ... )
       {
          vfprintf( gReport, fmt, argptr );
       }
-      vprintf( fmt, argptr );
+      vfprintf( stderr, fmt, argptr );
       va_end( argptr );
    }
 }
@@ -874,6 +874,9 @@ static void drawSurface( GLCtx *glCtx, Surface *surface )
    y= surface->y;
    w= surface->w;
    h= surface->h;
+
+   iprintf(6,"drawSurface: surface %p (%d, %d, %d, %d) dirty %d haveYUVTextures %d textureId[0] %d externalImage %d\n",
+           surface, x, y, w, h, surface->dirty, surface->haveYUVTextures, surface->textureId[0], surface->externalImage);
  
    const float verts[4][2]=
    {
@@ -916,10 +919,12 @@ static void drawSurface( GLCtx *glCtx, Surface *surface )
          if ( surface->textureId[i] == GL_NONE )
          {
             glGenTextures(1, &surface->textureId[i] );
+            iprintf(6,"drawSurface: surface %p texture[%d] %d\n", surface, i, surface->textureId[i]);
          }
        
          glActiveTexture(GL_TEXTURE0+i);
          glBindTexture(GL_TEXTURE_2D, surface->textureId[i] );
+         iprintf(6,"drawSurface: surface %p eglImage[%d] %p\n", surface, i, surface->eglImage[i]);
          if ( surface->eglImage[i] )
          {
             if ( surface->externalImage )
@@ -2474,7 +2479,7 @@ static bool prepareStream( AppCtx *appCtx, Stream *stream )
    {
       if ( (p[i] == 0) && (p[i+1] == 0) && (p[i+2] == 0) && (p[i+3] == 1) )
       {
-         if ( p[i+4] == 0x67 || p[i+4] == 0x68 || p[i+4] == 0x06 )
+         if ( p[i+4] == 0x67 || p[i+4] == 0x68 || p[i+4] == 0x06 || p[i+4] == 0x09 )
          {
             continue;
          }
@@ -2551,6 +2556,7 @@ static bool updateFrame( DecCtx *decCtx, Surface *surface )
             }
 
             buffIndex= findOutputBuffer( v4l2, decCtx->nextFrameFd );
+            iprintf(6,"updateFrame: found index %d for nextFrameFd %d\n", buffIndex, decCtx->nextFrameFd);
             if ( buffIndex >= 0 )
             {
                if ( v4l2->isMultiPlane )
@@ -2595,12 +2601,15 @@ static bool updateFrame( DecCtx *decCtx, Surface *surface )
                attr[i++]= EGL_SAMPLE_RANGE_HINT_EXT;
                attr[i++]= EGL_YUV_FULL_RANGE_EXT;
                attr[i++]= EGL_NONE;
+               iprintf(6,"updateFrame: %dx%d: fd0 %d off %d pitch %d fd1 %d off %d pitch %d\n",
+                       attr[1], attr[3], attr[7], attr[9], attr[11], attr[13], attr[15], attr[17] );
 
                surface->eglImage[0]= gl->eglCreateImageKHR( egl->eglDisplay,
                                                        EGL_NO_CONTEXT,
                                                        EGL_LINUX_DMA_BUF_EXT,
                                                        (EGLClientBuffer)NULL,
                                                        attr );
+               iprintf(6,"updateFrame: eglImage %p\n", surface->eglImage[0]);
                if ( surface->eglImage[0] == 0 )
                {
                  iprintf(0,"Error: updateFrame: eglCreateImageKHR failed for decoder %d fd %d: errno %X\n", decCtx->decodeIndex, decCtx->currFrameFd, eglGetError());
@@ -3153,6 +3162,7 @@ int main( int argc, const char **argv )
          else if ( (len == 9) && !strncmp( argv[argidx], "--verbose", len) )
          {
             gVerbose= true;
+            gLogLevel= 6;
          }
       }
       else if ( !appCtx->stream[0].inputFilename )
